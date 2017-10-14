@@ -147,20 +147,30 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers()
 
     # in subcommand
-    in_parser = subparsers.add_parser('in')
-    in_parser.add_argument('--time')
-    in_parser.add_argument('--clear', action='store_true')
+    in_parser = subparsers.add_parser('in',
+        description='clock in for the day')
+    in_parser.add_argument('--time',
+        help='specify clock in time, instead of using current time')
+    in_parser.add_argument('--clear',
+        action='store_true',
+        help='clear stored clock in with no corresponding clock out')
     in_parser.set_defaults(run=in_run)
 
     # out subcommand
-    out_parser = subparsers.add_parser('out')
-    out_parser.add_argument('--time')
+    out_parser = subparsers.add_parser('out',
+        description='clock out for the day')
+    out_parser.add_argument('--time',
+        help='specify clock out time, instead of using current time')
     out_parser.set_defaults(run=out_run)
 
     # hours subcommand
-    hours_parser = subparsers.add_parser('hours')
-    hours_parser.add_argument('--date')
-    hours_parser.add_argument('-y', '--yesterday', action='store_true')
+    hours_parser = subparsers.add_parser('hours',
+        description="total hours for a day's work")
+    hours_parser.add_argument('--date',
+        help='total hours from a specific date, rather than today')
+    hours_parser.add_argument('-y', '--yesterday',
+        action='store_true',
+        help='total hours from yesterday, rather than today')
     hours_parser.set_defaults(run=hours_run)
     
     # run clode
