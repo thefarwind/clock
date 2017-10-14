@@ -6,6 +6,50 @@ import sqlite3
 import sys
 
 
+# Helper Functions
+########################################################################
+# Because the datetime library sucks
+
+
+def date_parse(string):
+    parts = string.split('-')
+    # check length
+    if(len(parts) < 2 or len(parts) > 3):
+        raise ValueError("invalid date provided")
+
+    # convert to ints
+    parts = [int(item.lstrip('0')) for item in parts]
+
+    # create date
+    if(len(parts) == 2):
+        return datetime.date(datetime.date.today().year, *parts)
+    else:
+        return datetime.date(*parts)
+
+
+def time_parse(string):
+    # remove extraneous characters
+    if(string.endswith('m') or string.endswith('s')):
+        string = string[:-1]
+
+    # check if only time portion of date
+    if(len(string) <= 8):
+        parts = string.split(':')
+        # check length
+        if(len(parts) < 2 or len(parts) > 3):
+            raise ValueError("invalid date provided")
+
+        # convert to ints
+        parts = [int(item.lstrip('0')) for item in parts]
+
+        # create date
+        now = datetime.datetime.now()
+        return datetime.datetime(now.year, now.month, now.day, *parts)
+    else:
+        # assume iso date
+        return datetime.datetime.strptime(string, "%Y-%m-%dT%H:%M:%S")
+
+
 # Database Access
 ########################################################################
 SQLITE3_CREATE_TABLE_CLOCK_RANGE = '''
@@ -68,10 +112,14 @@ class TimeSource:
             (start, end),
         ).fetchall()
 
+
 # Command Line Functions
 ########################################################################
+
+
 def eprint(*args, **kwds):
     print(*args, file=sys.stderr, **kwds)
+
 
 def in_run(args):
     # clear clock in if requested
@@ -82,7 +130,7 @@ def in_run(args):
 
     # get time to insert
     if args.time:
-        raise NotImplementedError('custom time not yet supported')
+        time = time_parse(args.time)
     else:
         time = datetime.datetime.now()
 
@@ -101,12 +149,12 @@ def in_run(args):
 def out_run(args):
     # get time to insert
     if args.time:
-        raise NotImplementedError('custom time not yet supported')
+        time = time_parse(args.time)
     else:
         time = datetime.datetime.now()
 
     timesource = TimeSource()
-    
+
     # check if clock in has not occurred
     if not timesource.get_clock_in():
         eprint("clock in not yet called. clock in before clocking out")
@@ -120,7 +168,7 @@ def out_run(args):
 def hours_run(args):
     # get date to examine
     if args.date:
-        raise NotImplementedError('custom date not yet supported')
+        date = date_parse(args.date)
     elif args.yesterday:
         date = datetime.date.today() - datetime.timedelta(days=1)
     else:
@@ -139,6 +187,7 @@ def hours_run(args):
         end = min(end, end_date)
         total += end - start
     print(total)
+
 
 
 if __name__ == '__main__':
@@ -172,7 +221,7 @@ if __name__ == '__main__':
         action='store_true',
         help='total hours from yesterday, rather than today')
     hours_parser.set_defaults(run=hours_run)
-    
+
     # run clode
     args = parser.parse_args()
     args.run(args)
