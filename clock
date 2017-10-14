@@ -1,0 +1,168 @@
+#!/usr/bin/python
+
+import argparse
+import datetime
+import sqlite3
+import sys
+
+
+# Database Access
+########################################################################
+SQLITE3_CREATE_TABLE_CLOCK_RANGE = '''
+CREATE TABLE IF NOT EXISTS clock_range(
+    uuid INTEGER PRIMARY KEY AUTOINCREMENT,
+    clock_in TIMESTAMP UNIQUE NOT NULL,
+    clock_out TIMESTAMP UNIQUE NOT NULL);
+'''
+SQLITE3_CREATE_TABLE_CLOCK_IN = '''
+CREATE TABLE IF NOT EXISTS clock_in (
+    time TIMESTAMP NOT NULL)
+'''
+SQLITE3_INSERT_CLOCK_IN = '''
+INSERT INTO clock_in VALUES(?)
+'''
+SQLITE3_DELETE_CLOCK_IN = '''
+DELETE FROM clock_in
+'''
+SQLITE3_SELECT_CLOCK_IN = '''
+SELECT time FROM clock_in
+'''
+SQLITE3_INSERT_CLOCK_RANGE = '''
+INSERT INTO clock_range(clock_in, clock_out) VALUES(?,?)
+'''
+SQLITE3_SELECT_CLOCK_RANGE = '''
+SELECT clock_in, clock_out
+    FROM clock_range
+    WHERE clock_out >= ? AND clock_in <= ?
+'''
+
+DETECT_TYPES = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+
+class TimeSource:
+    def __init__(self, db='.clock.sqlite3'):
+        self.conn = sqlite3.connect(db, detect_types=DETECT_TYPES)
+        self.conn.execute(SQLITE3_CREATE_TABLE_CLOCK_RANGE)
+        self.conn.execute(SQLITE3_CREATE_TABLE_CLOCK_IN)
+
+    def get_clock_in(self):
+        clock_in = self.conn.execute(SQLITE3_SELECT_CLOCK_IN).fetchone()
+        return clock_in[0] if clock_in else None
+
+    def set_clock_in(self, time):
+        self.conn.execute(SQLITE3_INSERT_CLOCK_IN, (time,))
+        self.conn.commit()
+
+    def clear_clock_in(self):
+        self.conn.execute(SQLITE3_DELETE_CLOCK_IN)
+        self.conn.commit()
+
+    def set_clock_out(self, time):
+        clock_in = self.get_clock_in()
+        self.conn.execute(SQLITE3_INSERT_CLOCK_RANGE, (clock_in, time))
+        self.conn.execute(SQLITE3_DELETE_CLOCK_IN)
+        self.conn.commit()
+
+    def get_clock_ranges(self, start, end):
+        return self.conn.execute(
+            SQLITE3_SELECT_CLOCK_RANGE,
+            (start, end),
+        ).fetchall()
+
+# Command Line Functions
+########################################################################
+def eprint(*args, **kwds):
+    print(*args, file=sys.stderr, **kwds)
+
+def in_run(args):
+    # clear clock in if requested
+    if args.clear:
+        timesource = TimeSource()
+        timesource.clear_clock_in()
+        return
+
+    # get time to insert
+    if args.time:
+        raise NotImplementedError('custom time not yet supported')
+    else:
+        time = datetime.datetime.now()
+
+    timesource = TimeSource()
+
+    # check if clock in already occurred
+    if timesource.get_clock_in():
+        eprint("clock in already called. clock out or clear clock in.")
+        return
+
+    # clock in
+    timesource.set_clock_in(time)
+
+
+
+def out_run(args):
+    # get time to insert
+    if args.time:
+        raise NotImplementedError('custom time not yet supported')
+    else:
+        time = datetime.datetime.now()
+
+    timesource = TimeSource()
+    
+    # check if clock in has not occurred
+    if not timesource.get_clock_in():
+        eprint("clock in not yet called. clock in before clocking out")
+        return
+
+    # clock out
+    timesource.set_clock_out(time)
+
+
+
+def hours_run(args):
+    # get date to examine
+    if args.date:
+        raise NotImplementedError('custom date not yet supported')
+    elif args.yesterday:
+        date = datetime.date.today() - datetime.timedelta(days=1)
+    else:
+        date = datetime.date.today()
+
+    # get start and end datetimes
+    start_date = datetime.datetime(date.year, date.month, date.day)
+    end_date = start_date + datetime.timedelta(days=1)
+
+    timesource = TimeSource()
+
+    # get total time delta
+    total = datetime.timedelta()
+    for start, end in timesource.get_clock_ranges(start_date, end_date):
+        start = max(start, start_date)
+        end = min(end, end_date)
+        total += end - start
+    print(total)
+
+
+if __name__ == '__main__':
+    # create parser
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+
+    # in subcommand
+    in_parser = subparsers.add_parser('in')
+    in_parser.add_argument('--time')
+    in_parser.add_argument('--clear', action='store_true')
+    in_parser.set_defaults(run=in_run)
+
+    # out subcommand
+    out_parser = subparsers.add_parser('out')
+    out_parser.add_argument('--time')
+    out_parser.set_defaults(run=out_run)
+
+    # hours subcommand
+    hours_parser = subparsers.add_parser('hours')
+    hours_parser.add_argument('--date')
+    hours_parser.add_argument('-y', '--yesterday', action='store_true')
+    hours_parser.set_defaults(run=hours_run)
+    
+    # run clode
+    args = parser.parse_args()
+    args.run(args)
